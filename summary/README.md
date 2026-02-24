@@ -174,7 +174,7 @@ class Foto(database.Model):
     id_usuario = database.Column()  # Para dizer qual usuário postou a foto
 ```
 
-[!NOTE]
+>[!NOTE]
 > O banco de dados será uma string pois a informação que iremos armazenar será o local de onde a imagem está dentro do sistema. Imagens que iremos armazenar na pasta `static` 
 
 Vamos trabalhar melhor agora o objeto fotos que definimos ser uma instância. Para caso queiramos procurar no nosso banco de dados por uma foto específica de um determinado usuário, não precisaremos buscar por todas as fotos até encontrar a foto com o id do usuário escolhido. É muito mais fácil fazer com que o banco de dados busque um usuário e verifique todas as fotos que ele possui, é para isso que serve o `relationship()`
