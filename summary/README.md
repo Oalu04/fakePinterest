@@ -115,3 +115,130 @@ Perfil - {{ usuario }}
 </body>
 {% endblock %}
 ```
+
+# Montagem do banco de dados 
+
+Iremos começar criando nosso banco de dados no arquivo `__init__` 
+```python
+from flask_sqlalchemy import SQLAlchemy
+
+app = __name__
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///comunidade.db"
+
+database = SQLAlchemy(app)
+
+
+```
+Vamos agora criar um arquivo python que servirá para criar o banco de dados. Esse arquivo não vai precisar existir no final do projeto, mas vamos criá-lo aqui para o banco já existir e podermos visualizar-lo melhor.
+
+```python
+from fakepinterest import database, app
+
+
+with app.app_context():
+    database.create_all()
+```
+
+## Criar as tabelas
+O banco de dados que criamos ele vem completamente vazio, para preencher-lo precisamos inicialmente importar as tabelas que ele terá e definiremos isso no arquivo `models.py`. 
+
+Então agora vamos precisar criar essas tabelas:
+
+- Criamos as classes que servirão como tabelas para o banco de dados.
+- As classes que definimos serão subclasses do `database.Model`.
+- database.Model serve para criar a classe no formato que o nosso `database` entende como uma tabela.
+```python
+from fakepinterest import database
+
+class Usuario(database.Model):
+    pass
+
+class Foto(database.Model):
+    pass
+```
+- Agora definimos os objetos das classes como colunas do banco de dados
+- Definimos nos parênteses as regras que as colunas terão
+- Dizemos as regras que cada coluna irá ter
+```python
+class Usuario(database.Model):
+    id = database.Column(database.Integer, primary_key=True) # Ele vai ser um número inteiro e possui um identificador unico. Não aceita valores nulos ou duplicados.
+    username = database.Column(database.String, nullable=False) # Ele será uma string e não pode ser nulo
+    email = database.Column(database.String, nullable=False, unique=True) # Ele será uma string e não pode ser nulo e duplicado
+    senha = database.Column(database.String, nullable=False) # Ele será uma string e não pode ser nulo
+    fotos = database.relationship() # Esse objeto será uma instância da classe Foto
+
+class Foto(database.Model):
+    id = database.Column(database.Integer, primary_key=True)
+    imagem = database.Column(database.String, default="default.png")
+    data_criacao = database.Column(database.DataTime, nullable=false, default=datatime.utcnow()) # Informa o exato horario que a imagem foi criada.
+    id_usuario = database.Column()  # Para dizer qual usuário postou a foto
+```
+
+[!NOTE]
+> O banco de dados será uma string pois a informação que iremos armazenar será o local de onde a imagem está dentro do sistema. Imagens que iremos armazenar na pasta `static` 
+
+Vamos trabalhar melhor agora o objeto fotos que definimos ser uma instância. Para caso queiramos procurar no nosso banco de dados por uma foto específica de um determinado usuário, não precisaremos buscar por todas as fotos até encontrar a foto com o id do usuário escolhido. É muito mais fácil fazer com que o banco de dados busque um usuário e verifique todas as fotos que ele possui, é para isso que serve o `relationship()`
+
+- Passamos o nome da classe com qual ele irá se relacionar
+```python
+fotos = database.relationship("Foto", backref="usuario", lazy=True) #backref serve para pegarmos uma foto e encontrar um usuário. lazy=True otimizar busca de informação no banco de dados
+```
+
+Agora por último temos acrescentar mais informações ao id_usuario. Ele será uma `Foreign key`, uma coluna de uma tabela que faz referência à uma chave primária, neste caso à coluna id de Usuários.
+```python
+id_usuario = database.Column(database.Integer, database.ForeignKey('usuario.id'),  nullable=False)
+```
+
+
+
+# Criando o sistema de Login
+
+Utilizaremos a ferramenta do flask, o *flask login* que fará esse gerenciamento para nós e também para outros quesitos de segurança iremos baixar as ferramentas abaixo: 
+
+> pip install flask-login flask-bcrypt
+
+Flask-login: Gerencia as senhas e logins
+Flask-bcrypt: Ele fará a criptografia das senhas e logins
+
+Importaremos as ferramentas que instalamos e depois inicalizaremos 
+```python 
+from flask_login import LoginManager
+from flask_bcrypt import Bcrypt
+
+app.config["SECRET_KEY"] = "" # Aqui definimos uma chave de segurança
+
+bcrypt = Bcrypt(app)
+login_manager = LoginManager(app)
+login_manager.login_view = "homepage" # Colocamos a route que o usuario será mandado quando não estiver logado
+```
+
+Agora no `models.py` vamos gerenciar a estrutura de login
+
+- Importamos a biblioteca UserMixin
+- A classe Usuario receberá o UserMixin como um novo parâmetro
+- Importamos o login manager que definimos e ela pedirá por uma função obrigatória
+```python 
+from fakepinterest import database, login_manager
+from flask_login import UserMixin
+
+@load_manager.user_loader
+def load_usuario(id_usuario):
+    return Usuario.query.get(int(id_usuario))
+
+class Usuario(database.Model, UserMixin): # UserMixin é quem diz qual a classe que vai gerenciar a estrutura de logins
+```
+Uma pequena alteração antes de prosseguirmos: 
+
+No arquivo routes iremos colocar o decorator `@login_required` que serve basicamente para restringir o acesso àquela determinada página de usuários que ainda não estão logados.  
+```python
+from flask_login import login_required
+
+@app.route("/perfil/<usuario>")
+@login_required
+def perfil(usuario):
+    return render_template("perfil.html", usuario=usuario)
+```
+
+# Criando formulários de login
+
+Agora que criamos o gerenciamento de logins precisaremos de fato criar os formulários para que os usuários possam se registrar no nosso site. 
